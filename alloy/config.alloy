@@ -1,0 +1,39 @@
+// 1) 읽을 파일 지정
+local.file_match "sample" {
+  path_targets = [{
+    __path__ = "/var/log/sample/*.log",
+    job      = "sample-app",
+  }]
+}
+
+// 2) 파일 tail
+loki.source.file "sample" {
+  targets    = local.file_match.sample.targets
+  forward_to = [loki.process.json.receiver]
+}
+
+// 3) JSON 파싱 후 level, service만 라벨로 승격 (카디널리티 주의: 라벨은 적게)
+loki.process "json" {
+  stage.json {
+    expressions = {
+      level   = "level",
+      service = "service",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level   = "",
+      service = "",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+// 4) Loki로 전송
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
