@@ -1,0 +1,67 @@
+// ───────── 텍스트 로그 ─────────
+local.file_match "text" {
+  path_targets = [{
+    __path__ = "/var/log/sample/app.text.log",
+    job      = "app-text",
+  }]
+}
+
+loki.source.file "text" {
+  targets    = local.file_match.text.targets
+  forward_to = [loki.process.text.receiver]
+}
+
+// 정규식으로 level, service를 뽑아낸다 (형식이 바뀌면 같이 고쳐야 한다)
+loki.process "text" {
+  stage.regex {
+    expression = "^(?P<ts>\\S+ \\S+) \\[(?P<level>\\w+)\\] (?P<service>\\w+): (?P<message>.*)$"
+  }
+
+  stage.labels {
+    values = {
+      level   = "",
+      service = "",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+// ───────── JSON 로그 ─────────
+local.file_match "json" {
+  path_targets = [{
+    __path__ = "/var/log/sample/app.json.log",
+    job      = "app-json",
+  }]
+}
+
+loki.source.file "json" {
+  targets    = local.file_match.json.targets
+  forward_to = [loki.process.json.receiver]
+}
+
+// 필드 이름으로 바로 꺼낸다. 라벨은 level, service만 (user_id, request_id는 라벨 금지)
+loki.process "json" {
+  stage.json {
+    expressions = {
+      level   = "level",
+      service = "service",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level   = "",
+      service = "",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+// ───────── 전송 ─────────
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
